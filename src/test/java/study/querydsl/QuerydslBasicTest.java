@@ -1,9 +1,12 @@
 package study.querydsl;
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.ExpressionUtils;
+import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.JPAExpressions;
@@ -16,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Commit;
 import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.dto.MemberDto;
+import study.querydsl.dto.QMemberDto;
 import study.querydsl.dto.UserDto;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
@@ -556,4 +560,116 @@ public class QuerydslBasicTest {
             System.out.println(userDto);
         }
     }
+
+    @Test
+    void findDtoByQueryProjection() throws Exception {
+        queryFactory = new JPAQueryFactory(em);
+
+        List<MemberDto> result = queryFactory
+                .select(new QMemberDto(member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    @Test
+    void dynamicQueyr_BooleanBuilder() throws Exception {
+        String usernameParam = "member1";
+        Integer ageParam = null;
+
+        List<Member> result = searchMember1(usernameParam, ageParam);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember1(String usernameCond, Integer ageCond) {
+        BooleanBuilder builder = new BooleanBuilder();
+        if (usernameCond != null) {
+            builder.and(member.username.eq(usernameCond));
+        }
+
+        if (ageCond != null) {
+            builder.and(member.age.eq(ageCond));
+        }
+
+        queryFactory = new JPAQueryFactory(em);
+        return queryFactory
+                .selectFrom(member)
+                .where(builder)
+                .fetch();
+    }
+
+    @Test
+    void dynamicQuery_WhereParam() throws Exception {
+        String usernameParam = "member1";
+        Integer ageParam = null;
+
+        List<Member> result = searchMember2(usernameParam, ageParam);
+        assertThat(result.size()).isEqualTo(1);
+    }
+
+    private List<Member> searchMember2(String usernameCond, Integer ageCond) {
+        queryFactory = new JPAQueryFactory(em);
+        return queryFactory
+                .selectFrom(member)
+//                .where(usernameEq(usernameCond), ageEq(ageCond))
+                .where(allEq(usernameCond, ageCond))
+                .fetch();
+    }
+    private BooleanExpression ageEq(Integer ageCond) {
+        return ageCond != null ? member.age.eq(ageCond) : null;
+    }
+
+    private BooleanExpression usernameEq(String usernameCond) {
+        return usernameCond != null ? member.username.eq(usernameCond) : null;
+    }
+
+    private BooleanExpression allEq(String usernameCond, Integer ageCond) {
+        return usernameEq(usernameCond).and(ageEq(ageCond));
+    }
+
+    @Test
+    void bulkUpdate() throws Exception {
+        em.flush();
+        em.clear();
+
+        queryFactory = new JPAQueryFactory(em);
+
+        long count = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(28))
+                .execute();
+
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .fetch();
+
+        for (Member member1 : result) {
+            System.out.println("member1 = " + member1);
+        }
+    }
+
+    @Test
+    void bulkAdd() throws Exception {
+        queryFactory = new JPAQueryFactory(em);
+
+        long count = queryFactory
+                .update(member)
+                .set(member.age, member.age.add(1))
+                .execute();
+    }
+
+    @Test
+    void bulkDelete() throws Exception {
+        queryFactory = new JPAQueryFactory(em);
+
+        queryFactory
+                .delete(member)
+                .where(member.age.gt(10))
+                .execute();
+    }
+
 }
